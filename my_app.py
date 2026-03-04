@@ -1,95 +1,50 @@
 import streamlit as st
 import pandas as pd
 from st_supabase_connection import SupabaseConnection
-from datetime import datetime, date
+from datetime import date
 
 # 1. ตั้งค่าหน้าจอ
-st.set_page_config(layout="wide", page_title="ระบบจัดการยอดขาย WINE Cloud")
+st.set_page_config(layout="wide", page_title="ระบบจัดการยอดขาย WINE")
 
 # 2. เชื่อมต่อ Cloud Database
-try:
-    conn = st.connection("supabase", type=SupabaseConnection)
-except:
-    st.error("⚠️ ไม่สามารถเชื่อมต่อฐานข้อมูลได้ กรุณาเช็กหน้า Secrets")
-    st.stop()
+conn = st.connection("supabase", type=SupabaseConnection)
 
 st.title("🏨 ระบบจัดการยอดขาย Wine (Cloud Version)")
 
-# --- แถบด้านซ้าย (Sidebar): ส่วนตั้งค่าโรงแรมและร้านค้า ---
-with st.sidebar:
-    st.header("⚙️ ตั้งค่าระบบ")
-    
-    # ส่วนจัดการโรงแรม
-    with st.expander("🏢 เพิ่ม/ลบ รายชื่อโรงแรม"):
-        new_h = st.text_input("ชื่อโรงแรมใหม่", key="sidebar_new_h")
-        if st.button("บันทึกโรงแรม"):
-            if new_h:
-                try:
-                    conn.table("hotels").insert({"name": new_h.strip()}).execute()
-                    st.rerun()
-                except: st.warning("มีชื่อนี้อยู่แล้ว")
-        
-        # ดึงข้อมูลโรงแรมมาแสดง
-        # แก้ไขบรรทัดที่ 33-35 เป็นชุดนี้ค่ะ
-        try:
-            h_res = conn.table("hotels").select("name").execute()
-            h_data = pd.DataFrame(h_res.data) if h_res.data else pd.DataFrame(columns=['name'])
-        except Exception as e:
-            st.warning("🔄 ระบบกำลังรีเซ็ตการเชื่อมต่อกับ Cloud...")
-            h_data = pd.DataFrame(columns=['name'])
-        
-        h_list = h_data['name'].tolist() if not h_data.empty else []
-        h_to_del = st.selectbox("เลือกโรงแรมที่จะลบ", [""] + h_list, key="sidebar_del_h")
-        if st.button("ลบโรงแรม"):
-            if h_to_del:
-                conn.table("hotels").delete().eq("name", h_to_del).execute()
-                st.rerun()
-
-    # ส่วนจัดการร้านค้า
-    with st.expander("🛍️ เพิ่ม/ลบ รายชื่อร้านค้า"):
-        new_s = st.text_input("ชื่อร้านค้าใหม่", key="sidebar_new_s")
-        if st.button("บันทึกร้านค้า"):
-            if new_s:
-                try:
-                    conn.table("suppliers").insert({"name": new_s.strip()}).execute()
-                    st.rerun()
-                except: st.warning("มีชื่อนี้อยู่แล้ว")
-        
-       # แก้ไขโค้ดส่วนดึงข้อมูลร้านค้า (บรรทัดที่ 58 เป็นต้นไป) ให้เป็นแบบนี้ค่ะ:
-        try:
-            s_res = conn.table("suppliers").select("name").execute()
-            s_data = pd.DataFrame(s_res.data) if s_res.data else pd.DataFrame(columns=['name'])
-        except Exception as e:
-            st.warning("🔄 ระบบกำลังเชื่อมต่อฐานข้อมูลร้านค้า...")
-            s_data = pd.DataFrame(columns=['name'])
-        
-        s_list = s_data['name'].tolist() if not s_data.empty else []
-        s_to_del = st.selectbox("เลือกร้านค้าที่จะลบ", [""] + s_list, key="sidebar_del_s")
-        if st.button("ลบร้านค้า"):
-            if s_to_del:
-                conn.table("suppliers").delete().eq("name", s_to_del).execute()
-                st.rerun()
-
-# --- ส่วนบันทึกยอดขายและรายงาน (ใช้ตารางรายชื่อจาก Cloud) ---
+# --- ส่วนที่ 1: บันทึกข้อมูล ---
 st.subheader("📥 บันทึกยอดขาย WINE")
-if not h_list or not s_list:
-    st.info("💡 กรุณาเพิ่มรายชื่อ 'โรงแรม' และ 'ร้านค้า' ที่แถบด้านซ้ายมือก่อนนะคะ")
-else:
-    with st.form("main_sales_form", clear_on_submit=True):
-        col1, col2 = st.columns(2)
-        supplier_val = col1.selectbox("เลือก Supplier", s_list)
-        stype_val = col1.radio("ประเภทการขาย", ["CONSIGNMENT", "CREDIT"], horizontal=True)
-        hotel_val = col2.selectbox("เลือกโรงแรม", h_list)
-        sale_date_val = col2.date_input("เลือกวันที่ขาย", date.today())
-        amount_val = st.number_input("ยอดเงินยอดขาย (บาท)", min_value=0.0, step=1.0)
-        
-        if st.form_submit_button("บันทึกข้อมูล"):
-            if amount_val > 0:
-                conn.table("sales_data").insert({
-                    "supplier": supplier_val, "stype": stype_val, 
-                    "hotel": hotel_val, "sale_date": str(sale_date_val), "amount": amount_val
-                }).execute()
-                st.success(f"✅ บันทึกยอด {amount_val:,.2f} เรียบร้อย!")
+
+# รายชื่อโรงแรมและร้านค้า (คุณสามารถมาแก้เพิ่มตรงนี้ได้ตลอดค่ะ)
+suppliers_options = ["AMBROSE", "IWS", "ITALTHAI", "WINE DEE DEE", "BKK BEVERAGE"]
+hotels_options = ["2 SAN", "HOTEL A", "HOTEL B", "CASA DE LA FLORA", "LA VELA"]
+
+with st.form("sales_form", clear_on_submit=True):
+    col1, col2 = st.columns(2)
+    sup = col1.selectbox("Supplier", suppliers_options)
+    stype = col1.radio("ประเภท", ["CONSIGNMENT", "CREDIT"], horizontal=True)
+    hot = col2.selectbox("โรงแรม", hotels_options)
+    s_date = col2.date_input("วันที่", date.today())
+    amt = st.number_input("ยอดเงิน (บาท)", min_value=0.0)
+    
+    if st.form_submit_button("บันทึกข้อมูล"):
+        if amt > 0:
+            row = {"supplier": sup, "stype": stype, "hotel": hot, "sale_date": str(s_date), "amount": amt}
+            try:
+                conn.table("sales_data").insert(row).execute()
+                st.success(f"✅ บันทึกยอด {amt:,.2f} ลง Cloud เรียบร้อย!")
                 st.rerun()
+            except Exception as e:
+                st.error(f"เกิดข้อผิดพลาด: {e}")
 
-
+# --- ส่วนที่ 2: แสดงรายงาน ---
+st.divider()
+try:
+    res = conn.table("sales_data").select("*").execute()
+    if res.data:
+        df = pd.DataFrame(res.data)
+        st.subheader("📊 รายงานยอดขายสะสมบน Cloud")
+        st.dataframe(df, use_container_width=True)
+    else:
+        st.info("ยังไม่มีข้อมูลบน Cloud เริ่มบันทึกได้เลยค่ะ")
+except:
+    st.warning("กำลังรอการเชื่อมต่อกับ Supabase...")

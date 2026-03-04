@@ -23,10 +23,10 @@ with st.sidebar:
     # ดึงข้อมูลโรงแรมและร้านค้ามาแสดง
     try:
         h_res = conn.table("hotels").select("name").execute()
-        h_list = [i['name'] for i in h_res.data] if h_res.data else []
+        h_list = sorted([i['name'] for i in h_res.data]) if h_res.data else []
         
         s_res = conn.table("suppliers").select("name").execute()
-        s_list = [i['name'] for i in s_res.data] if s_res.data else []
+        s_list = sorted([i['name'] for i in s_res.data]) if s_res.data else []
     except:
         h_list, s_list = [], []
 
@@ -105,17 +105,23 @@ try:
         df_filtered = df_raw.loc[mask].copy()
 
         if not df_filtered.empty:
+            # --- แก้ไขการเรียงลำดับเดือน (เก่าไปใหม่) ---
+            df_filtered = df_filtered.sort_values('sale_date')
             df_filtered['month_year'] = df_filtered['sale_date'].dt.strftime('%b-%y')
+            
             pivot = df_filtered.pivot_table(index=['supplier', 'stype', 'hotel'], 
                                             columns='month_year', values='amount', 
-                                            aggfunc='sum', fill_value=0, margins=True, margins_name='TOTAL')
+                                            aggfunc='sum', fill_value=0, margins=True, 
+                                            margins_name='TOTAL', sort=False)
+            
+            st.write("📈 **ตารางสรุปยอดขาย (เรียงตามลำดับเดือน)**")
             st.dataframe(pivot, use_container_width=True)
             
             # ปุ่มดาวน์โหลด Excel
             buffer = io.BytesIO()
             with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
                 pivot.to_excel(writer, sheet_name='Monthly_Report')
-            st.download_button("💾 ดาวน์โหลดรายงาน Excel", data=buffer, file_name="wine_sales_report.xlsx")
+            st.download_button("💾 ดาวน์โหลดรายงาน Excel", data=buffer, file_name=f"wine_report_{date.today()}.xlsx")
             
             # --- ส่วนที่ 3: ระบบแก้ไข/ลบข้อมูล ---
             st.write("---")
@@ -127,20 +133,20 @@ try:
                 
                 m_col1, m_col2, m_col3 = st.columns([1,2,1])
                 target_id = m_col1.number_input("ระบุ ID ที่ต้องการจัดการ", min_value=1, step=1)
-                edit_amount = m_col2.number_input("ระบุยอดเงินใหม่", min_value=0.0)
+                edit_amount = m_col2.number_input("ยอดเงินใหม่", min_value=0.0)
                 
-                if m_col3.button("🔄 อัปเดตยอดเงิน"):
+                if m_col3.button("🔄 อัปเดตยอดเงิน", use_container_width=True):
                     conn.table("sales_data").update({"amount": edit_amount}).eq("id", target_id).execute()
                     st.success("อัปเดตสำเร็จ!")
                     st.rerun()
                     
-                if m_col3.button("🗑️ ลบข้อมูล", type="primary"):
+                if m_col3.button("🗑️ ลบข้อมูล", type="primary", use_container_width=True):
                     conn.table("sales_data").delete().eq("id", target_id).execute()
                     st.warning("ลบข้อมูลเรียบร้อย!")
                     st.rerun()
         else:
             st.warning("⚠️ ไม่พบข้อมูลในช่วงเวลาที่เลือก")
     else:
-        st.info("ยังไม่มีข้อมูลในระบบ")
+        st.info("ยังไม่มีข้อมูลในระบบ เริ่มบันทึกข้อมูลด้านบนได้เลยค่ะ")
 except Exception as e:
     st.info("กำลังรอการเชื่อมต่อข้อมูล...")

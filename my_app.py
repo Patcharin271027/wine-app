@@ -3,79 +3,79 @@ import pandas as pd
 from st_supabase_connection import SupabaseConnection
 from datetime import date
 
-# 1. ตั้งค่าหน้าจอ
-st.set_page_config(layout="wide", page_title="ระบบจัดการยอดขาย WINE")
-
-# 2. เชื่อมต่อ Cloud Database (Supabase)
+st.set_page_config(layout="wide", page_title="ระบบยอดขาย WINE Cloud")
 conn = st.connection("supabase", type=SupabaseConnection)
 
-st.title("🏨 ระบบจัดการยอดขาย Wine (Cloud Version)")
+# --- ส่วนที่ 1: จัดการรายชื่อใน Sidebar ---
+with st.sidebar:
+    st.header("⚙️ ตั้งค่าระบบ")
+    
+    # จัดการ Supplier
+    with st.expander("🏢 เพิ่ม/ลบ รายชื่อร้านค้า"):
+        new_sup = st.text_input("ชื่อร้านค้าใหม่")
+        if st.button("บันทึกร้านค้า"):
+            if new_sup:
+                conn.table("suppliers").insert({"name": new_sup}).execute()
+                st.rerun()
+        
+        sups_data = conn.table("suppliers").select("name").execute().data
+        for s in sups_data:
+            col_s1, col_s2 = st.columns([3, 1])
+            col_s1.text(s['name'])
+            if col_s2.button("🗑️", key=f"del_s_{s['name']}"):
+                conn.table("suppliers").delete().eq("name", s['name']).execute()
+                st.rerun()
 
-# --- ส่วนที่ 1: ฟอร์มบันทึกยอดขาย ---
+    # จัดการ โรงแรม
+    with st.expander("🏨 เพิ่ม/ลบ รายชื่อโรงแรม"):
+        new_hotel = st.text_input("ชื่อโรงแรมใหม่")
+        if st.button("บันทึกโรงแรม"):
+            if new_hotel:
+                conn.table("hotels").insert({"name": new_hotel}).execute()
+                st.rerun()
+        
+        hotels_data = conn.table("hotels").select("name").execute().data
+        for h in hotels_data:
+            col_h1, col_h2 = st.columns([3, 1])
+            col_h1.text(h['name'])
+            if col_h2.button("🗑️", key=f"del_h_{h['name']}"):
+                conn.table("hotels").delete().eq("name", h['name']).execute()
+                st.rerun()
+
+# --- ส่วนที่ 2: ฟอร์มบันทึกยอดขาย ---
+st.title("🏨 ระบบจัดการยอดขาย Wine (Cloud Version)")
 st.subheader("📥 บันทึกยอดขาย WINE")
 
-# กำหนดรายชื่อเพื่อให้ใช้งานร่วมกันได้ทันที
-suppliers_options = ["AMBROSE", "IWS", "ITALTHAI", "WINE DEE DEE"]
-hotels_options = ["2 SAN", "HOTEL A", "HOTEL B"]
+# ดึงรายชื่อจาก Database มาแสดงใน Selectbox
+current_sups = [item['name'] for item in conn.table("suppliers").select("name").execute().data]
+current_hotels = [item['name'] for item in conn.table("hotels").select("name").execute().data]
 
-with st.form("main_sales_form", clear_on_submit=True):
-    col1, col2 = st.columns(2)
-    supplier_val = col1.selectbox("เลือก Supplier", suppliers_options)
-    stype_val = col1.radio("ประเภทการขาย", ["CONSIGNMENT", "CREDIT"], horizontal=True)
-    hotel_val = col2.selectbox("เลือกโรงแรม", hotels_options)
-    sale_date_val = col2.date_input("เลือกวันที่ขาย", date.today())
-    amount_val = st.number_input("ยอดเงินยอดขาย (บาท)", min_value=0.0, step=1.0)
-    
-    btn_save = st.form_submit_button("บันทึกข้อมูล")
-    
-    if btn_save:
-        if amount_val > 0:
-            # บันทึกข้อมูลลง Cloud ทันที
-            new_data = {
-                "supplier": supplier_val,
-                "stype": stype_val,
-                "hotel": hotel_val,
-                "sale_date": str(sale_date_val),
-                "amount": amount_val
-            }
-            try:
-                conn.table("sales_data").insert(new_data).execute()
-                st.success(f"✅ บันทึกยอด {amount_val:,.2f} ลง Cloud สำเร็จ!")
-                st.rerun()
-            except Exception as e:
-                st.error(f"เกิดข้อผิดพลาดในการบันทึก: {e}")
-        else:
-            st.error("❌ กรุณาใส่ยอดเงินที่มากกว่า 0")
-
-# --- ส่วนที่ 2: รายงานดึงจาก Cloud ---
-st.divider()
-st.subheader("📊 รายงานสรุปยอดขาย (Real-time Cloud)")
-
-try:
-    # ดึงข้อมูลทั้งหมดจาก Supabase
-    res = conn.table("sales_data").select("*").execute()
-    df = pd.DataFrame(res.data)
-
-    if not df.empty:
-        df['sale_date'] = pd.to_datetime(df['sale_date'])
+if not current_sups or not current_hotels:
+    st.warning("⚠️ กรุณาเพิ่มชื่อร้านค้าและโรงแรมที่แถบด้านซ้ายก่อนเริ่มใช้งานค่ะ")
+else:
+    with st.form("main_form", clear_on_submit=True):
+        c1, c2 = st.columns(2)
+        sup_val = c1.selectbox("เลือก Supplier", current_sups)
+        stype_val = c1.radio("ประเภทการขาย", ["CONSIGNMENT", "CREDIT"], horizontal=True)
+        hotel_val = c2.selectbox("เลือกโรงแรม", current_hotels)
+        date_val = c2.date_input("วันที่ขาย", date.today())
+        amt_val = st.number_input("ยอดเงิน (บาท)", min_value=0.0)
         
-        # ตัวกรองรายงาน
-        f_col1, f_col2 = st.columns(2)
-        start_f = f_col1.date_input("จากวันที่", date.today().replace(day=1))
-        end_f = f_col2.date_input("ถึงวันที่", date.today())
+        if st.form_submit_button("บันทึกข้อมูล"):
+            if amt_val > 0:
+                conn.table("sales_data").insert({
+                    "supplier": sup_val, "stype": stype_val, 
+                    "hotel": hotel_val, "sale_date": str(date_val), "amount": amt_val
+                }).execute()
+                st.success("✅ บันทึกยอดลง Cloud เรียบร้อย!")
+                st.rerun()
 
-        mask = (df['sale_date'].dt.date >= start_f) & (df['sale_date'].dt.date <= end_f)
-        df_filtered = df.loc[mask].copy()
-
-        if not df_filtered.empty:
-            # ทำตารางสรุป
-            pivot = df_filtered.pivot_table(index=['supplier', 'hotel'], 
-                                           columns=df_filtered['sale_date'].dt.strftime('%b-%y'), 
-                                           values='amount', aggfunc='sum', fill_value=0)
-            st.dataframe(pivot, use_container_width=True)
-        else:
-            st.warning("ไม่มีข้อมูลในช่วงวันที่เลือก")
-    else:
-        st.info("ยังไม่มีข้อมูลในระบบ Cloud เริ่มบันทึกได้เลยค่ะ")
-except Exception as e:
-    st.info("กำลังรอการเชื่อมต่อฐานข้อมูลครั้งแรก...")
+# --- ส่วนที่ 3: รายงาน ---
+st.divider()
+try:
+    res = conn.table("sales_data").select("*").execute()
+    if res.data:
+        st.subheader("📊 รายงานสรุปยอดขาย")
+        st.dataframe(pd.DataFrame(res.data), use_container_width=True)
+except:
+    st.info("กำลังรอข้อมูลรายการแรก...")

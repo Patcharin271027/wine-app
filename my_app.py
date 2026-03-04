@@ -115,6 +115,7 @@ try:
                                             margins_name='TOTAL', sort=False)
             
             st.write("📈 **ตารางสรุปยอดขาย (เรียงตามลำดับเดือน)**")
+            styled_pivot = pivot.style.format("{:,.0f}")
             st.dataframe(pivot, use_container_width=True)
             
             # ปุ่มดาวน์โหลด Excel
@@ -150,3 +151,4 @@ try:
         st.info("ยังไม่มีข้อมูลในระบบ เริ่มบันทึกข้อมูลด้านบนได้เลยค่ะ")
 except Exception as e:
     st.info("กำลังรอการเชื่อมต่อข้อมูล...")
+

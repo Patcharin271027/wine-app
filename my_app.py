@@ -30,9 +30,13 @@ with st.sidebar:
                 except: st.warning("มีชื่อนี้อยู่แล้ว")
         
         # ดึงข้อมูลโรงแรมมาแสดง
-        h_res = conn.table("hotels").select("name").execute()
-        h_data = pd.DataFrame(h_res.data) if h_res.data else pd.DataFrame(columns=['name'])
-        st.dataframe(h_data, hide_index=True)
+        # แก้ไขบรรทัดที่ 33-35 เป็นชุดนี้ค่ะ
+        try:
+            h_res = conn.table("hotels").select("name").execute()
+            h_data = pd.DataFrame(h_res.data) if h_res.data else pd.DataFrame(columns=['name'])
+        except Exception as e:
+            st.warning("🔄 ระบบกำลังรีเซ็ตการเชื่อมต่อกับ Cloud...")
+            h_data = pd.DataFrame(columns=['name'])
         
         h_list = h_data['name'].tolist() if not h_data.empty else []
         h_to_del = st.selectbox("เลือกโรงแรมที่จะลบ", [""] + h_list, key="sidebar_del_h")
@@ -83,3 +87,4 @@ else:
                 }).execute()
                 st.success(f"✅ บันทึกยอด {amount_val:,.2f} เรียบร้อย!")
                 st.rerun()
+

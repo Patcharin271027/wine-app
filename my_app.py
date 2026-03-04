@@ -55,9 +55,13 @@ with st.sidebar:
                     st.rerun()
                 except: st.warning("มีชื่อนี้อยู่แล้ว")
         
-        s_res = conn.table("suppliers").select("name").execute()
-        s_data = pd.DataFrame(s_res.data) if s_res.data else pd.DataFrame(columns=['name'])
-        st.dataframe(s_data, hide_index=True)
+       # แก้ไขโค้ดส่วนดึงข้อมูลร้านค้า (บรรทัดที่ 58 เป็นต้นไป) ให้เป็นแบบนี้ค่ะ:
+        try:
+            s_res = conn.table("suppliers").select("name").execute()
+            s_data = pd.DataFrame(s_res.data) if s_res.data else pd.DataFrame(columns=['name'])
+        except Exception as e:
+            st.warning("🔄 ระบบกำลังเชื่อมต่อฐานข้อมูลร้านค้า...")
+            s_data = pd.DataFrame(columns=['name'])
         
         s_list = s_data['name'].tolist() if not s_data.empty else []
         s_to_del = st.selectbox("เลือกร้านค้าที่จะลบ", [""] + s_list, key="sidebar_del_s")
@@ -87,4 +91,5 @@ else:
                 }).execute()
                 st.success(f"✅ บันทึกยอด {amount_val:,.2f} เรียบร้อย!")
                 st.rerun()
+
 
